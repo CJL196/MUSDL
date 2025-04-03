@@ -131,8 +131,8 @@ def main(dataloaders, i3d, evaluator, base_logger, args):
                     optimizer.step()
 
             rho, p = stats.spearmanr(pred_scores, true_scores)
-            # r_l2_curr = (np.power((pred - target) / (target.max() - target.min()) ,2).sum() /
-            #              target.shape[0]) * 100
+            true_scores = np.array(true_scores)
+            pred_scores = np.array(pred_scores)
             r_l2_curr = (np.power((pred_scores - true_scores) / (true_scores.max() - true_scores.min()) ,2).sum() /
                          true_scores.shape[0]) * 100
             writer.add_scalar(f'{split}/r_l2', r_l2_curr, epoch)
