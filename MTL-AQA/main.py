@@ -14,6 +14,7 @@ from dataset import VideoDataset
 from models.i3d import InceptionI3d
 from models.evaluator import Evaluator
 from config import get_parser
+from torch.utils.tensorboard import SummaryWriter
 
 
 def get_models(args):
@@ -89,6 +90,7 @@ def main(dataloaders, i3d, evaluator, base_logger, args):
 
     epoch_best = 0
     rho_best = 0
+    writer = SummaryWriter(log_dir='./logs')
     for epoch in range(args.num_epochs):
         log_and_print(base_logger, f'Epoch: {epoch}  Current Best: {rho_best} at epoch {epoch_best}')
 
@@ -105,6 +107,7 @@ def main(dataloaders, i3d, evaluator, base_logger, args):
                 evaluator.eval()
                 torch.set_grad_enabled(False)
 
+            total_loss = 0
             for data in tqdm(dataloaders[split]):
                 true_scores.extend(data['final_score'].numpy())
                 videos = data['video'].cuda()  # bs, vlen, 3, 224, 224
@@ -122,13 +125,21 @@ def main(dataloaders, i3d, evaluator, base_logger, args):
 
                 if split == 'train':
                     loss = compute_loss(args.type, criterion, probs, data)
+                    total_loss += loss.item()
                     optimizer.zero_grad()
                     loss.backward()
                     optimizer.step()
 
             rho, p = stats.spearmanr(pred_scores, true_scores)
+            # r_l2_curr = (np.power((pred - target) / (target.max() - target.min()) ,2).sum() /
+            #              target.shape[0]) * 100
+            r_l2_curr = (np.power((pred_scores - true_scores) / (true_scores.max() - true_scores.min()) ,2).sum() /
+                         true_scores.shape[0]) * 100
+            writer.add_scalar(f'{split}/r_l2', r_l2_curr, epoch)
+            writer.add_scalar(f'{split}/rho', rho, epoch)
+            writer.add_scalar(f'{split}/loss', total_loss / len(dataloaders[split]), epoch)
 
-            log_and_print(base_logger, f'{split} correlation: {rho}')
+            log_and_print(base_logger, f'{split} correlation: {rho}, r_l2: {r_l2_curr}')
 
         if rho > rho_best:
             rho_best = rho
