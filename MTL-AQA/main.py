@@ -51,7 +51,7 @@ def compute_score(model_type, probs, data):
 
 def compute_loss(model_type, criterion, probs, data):
     if model_type == 'USDL':
-        loss = criterion(torch.log(probs), data['soft_label'].cuda())
+        loss = criterion(torch.log(probs), data['soft_label'].cuda()) # data['soft_label'].shape: bs, 101
     else:
         loss = sum([criterion(torch.log(probs[i]), data['soft_judge_scores'][:, i].cuda()) for i in range(num_judges)])
     return loss
@@ -107,8 +107,8 @@ def main(dataloaders, i3d, evaluator, base_logger, args):
 
             for data in tqdm(dataloaders[split]):
                 true_scores.extend(data['final_score'].numpy())
-                videos = data['video'].cuda()
-                videos.transpose_(1, 2)  # N, C, T, H, W
+                videos = data['video'].cuda()  # bs, vlen, 3, 224, 224
+                videos.transpose_(1, 2)  # bs, 3, vlen, 224, 224
 
                 batch_size, C, frames, H, W = videos.shape
                 clip_feats = torch.empty(batch_size, 10, feature_dim).cuda()
@@ -116,8 +116,8 @@ def main(dataloaders, i3d, evaluator, base_logger, args):
                     clip_feats[:, i] = i3d(videos[:, :, 10 * i:10 * i + 16, :, :]).squeeze(2)
                 clip_feats[:, 9] = i3d(videos[:, :, -16:, :, :]).squeeze(2)
 
-                probs = evaluator(clip_feats.mean(1))
-                preds = compute_score(args.type, probs, data)
+                probs = evaluator(clip_feats.mean(1)) # MLP, probs.shape: bs, 101
+                preds = compute_score(args.type, probs, data) # preds.shape: bs
                 pred_scores.extend([i.item() for i in preds])
 
                 if split == 'train':
